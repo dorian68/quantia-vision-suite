@@ -32,6 +32,11 @@ import { CustomDashboardCreator, CustomDashboard } from '@/components/intelligen
 import { AdminDashboard } from '@/components/admin/AdminDashboard';
 import { toast } from 'sonner';
 
+// Extended ReportData to include description
+interface ExtendedReportData extends ReportData {
+  description?: string;
+}
+
 const ReportCard = ({ title, description, tags, date, onView }: {
   title: string;
   description: string;
@@ -160,9 +165,9 @@ const IntelligencePage = () => {
   const [showReportGenerator, setShowReportGenerator] = useState(false);
   const [showDashboardCreator, setShowDashboardCreator] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-  const [selectedReport, setSelectedReport] = useState<ReportData | null>(null);
+  const [selectedReport, setSelectedReport] = useState<ExtendedReportData | null>(null);
   const [showReportViewer, setShowReportViewer] = useState(false);
-  const [reports, setReports] = useState<ReportData[]>([
+  const [reports, setReports] = useState<ExtendedReportData[]>([
     {
       id: 'report-1',
       title: 'Rapport mensuel de performance',
@@ -195,10 +200,10 @@ const IntelligencePage = () => {
   };
   
   const handleGenerateReport = (reportData: ReportData) => {
-    setReports(prev => [reportData, ...prev]);
+    setReports(prev => [{...reportData, description: ''}, ...prev]);
   };
   
-  const handleViewReport = (report: ReportData) => {
+  const handleViewReport = (report: ExtendedReportData) => {
     setSelectedReport(report);
     setShowReportViewer(true);
   };

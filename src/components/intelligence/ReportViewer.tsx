@@ -91,7 +91,7 @@ const ReportKPISummary = ({ report, data }: { report: ReportData, data: any[] })
   const getTrend = (current: number, previous: number | null) => {
     if (!previous) return { value: 0, isPositive: true };
     const diff = ((current - previous) / previous) * 100;
-    return { value: Math.abs(diff).toFixed(1), isPositive: diff >= 0 };
+    return { value: Number(Math.abs(diff).toFixed(1)), isPositive: diff >= 0 };
   };
 
   return (
