@@ -29,9 +29,20 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Create a Supabase client
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Add fallback values to prevent errors if env variables are missing
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://your-project-url.supabase.co';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+
+// Initialize Supabase client with error handling
+let supabase: SupabaseClient;
+try {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  console.log('Supabase client initialized successfully');
+} catch (error) {
+  console.error('Error initializing Supabase client:', error);
+  // Provide a fallback client to avoid breaking the app
+  supabase = {} as SupabaseClient;
+}
 
 // User storage keys
 const USER_STORAGE_KEY = 'optiquantia-user';
@@ -43,80 +54,113 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check for existing session on mount
   useEffect(() => {
+    // Check if Supabase client is properly initialized
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Supabase URL or key is missing. Authentication will not work properly.');
+      setLoading(false);
+      return;
+    }
+
     const checkAuth = async () => {
       setLoading(true);
       
-      // Check for existing Supabase session
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session) {
-        // Fetch user profile from Supabase
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
+      try {
+        // Check for existing Supabase session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error("Error fetching user profile:", error);
+        if (sessionError) {
+          console.error("Error getting session:", sessionError);
           setUser(null);
-        } else if (profile) {
-          const userData: User = {
-            id: profile.id,
-            email: session.user.email || '',
-            name: profile.name || '',
-            company: profile.company,
-            role: profile.role || 'user',
-            plan: profile.plan || 'free',
-          };
-          
-          setUser(userData);
-          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+          setLoading(false);
+          return;
         }
-      } else {
+        
+        if (session) {
+          try {
+            // Fetch user profile from Supabase
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) {
+              console.error("Error fetching user profile:", error);
+              setUser(null);
+            } else if (profile) {
+              const userData: User = {
+                id: profile.id,
+                email: session.user.email || '',
+                name: profile.name || '',
+                company: profile.company,
+                role: profile.role || 'user',
+                plan: profile.plan || 'free',
+              };
+              
+              setUser(userData);
+              localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+            }
+          } catch (error) {
+            console.error("Error processing user profile:", error);
+            setUser(null);
+          }
+        } else {
+          setUser(null);
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
+      } catch (error) {
+        console.error("Error checking auth:", error);
         setUser(null);
-        localStorage.removeItem(USER_STORAGE_KEY);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
     };
     
     checkAuth();
     
-    // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          // Fetch user profile
-          const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (!error && profile) {
-            const userData: User = {
-              id: profile.id,
-              email: session.user.email || '',
-              name: profile.name || '',
-              company: profile.company,
-              role: profile.role || 'user',
-              plan: profile.plan || 'free',
-            };
-            
-            setUser(userData);
-            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+    try {
+      // Set up auth state change listener
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (event === 'SIGNED_IN' && session) {
+            try {
+              // Fetch user profile
+              const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .single();
+              
+              if (!error && profile) {
+                const userData: User = {
+                  id: profile.id,
+                  email: session.user.email || '',
+                  name: profile.name || '',
+                  company: profile.company,
+                  role: profile.role || 'user',
+                  plan: profile.plan || 'free',
+                };
+                
+                setUser(userData);
+                localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+              }
+            } catch (error) {
+              console.error("Error processing auth state change:", error);
+            }
+          } else if (event === 'SIGNED_OUT') {
+            setUser(null);
+            localStorage.removeItem(USER_STORAGE_KEY);
           }
-        } else if (event === 'SIGNED_OUT') {
-          setUser(null);
-          localStorage.removeItem(USER_STORAGE_KEY);
         }
-      }
-    );
-    
-    return () => {
-      subscription.unsubscribe();
-    };
+      );
+      
+      return () => {
+        subscription.unsubscribe();
+      };
+    } catch (error) {
+      console.error("Error setting up auth state change listener:", error);
+      return () => {};
+    }
   }, []);
 
   // Login function
@@ -217,16 +261,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Logout function
   const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    
-    if (error) {
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error("Logout error:", error);
+        toast.error('Erreur lors de la déconnexion');
+      } else {
+        setUser(null);
+        localStorage.removeItem(USER_STORAGE_KEY);
+        navigate('/login');
+        toast.success('Déconnexion réussie');
+      }
+    } catch (error) {
       console.error("Logout error:", error);
       toast.error('Erreur lors de la déconnexion');
-    } else {
-      setUser(null);
-      localStorage.removeItem(USER_STORAGE_KEY);
-      navigate('/login');
-      toast.success('Déconnexion réussie');
     }
   };
 
