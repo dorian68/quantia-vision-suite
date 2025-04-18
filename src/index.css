@@ -49,9 +49,18 @@
   }
 
   .dark {
-    /* Dark mode colors */
+    /* Dark mode colors with improved sidebar visibility */
     --background: 240 10% 12%;
     --foreground: 0 0% 98%;
+
+    --sidebar-background: 240 10% 15%; /* Slightly lighter than background for contrast */
+    --sidebar-foreground: 0 0% 90%; /* Bright enough to be readable */
+    --sidebar-primary: 210 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 10% 25%; /* Darker accent for better readability */
+    --sidebar-accent-foreground: 0 0% 95%; /* Very light text for accent areas */
+    --sidebar-border: 240 10% 20%; /* Dark border */
+    --sidebar-ring: 210 100% 50%;
 
     --card: 240 10% 17%;
     --card-foreground: 0 0% 98%;
