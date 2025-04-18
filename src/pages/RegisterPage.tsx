@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 // Define the form validation schema
 const registerFormSchema = z.object({
@@ -26,9 +27,15 @@ const registerFormSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerFormSchema>;
 
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { register, user } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  
+  // If already logged in, redirect to home
+  if (user) {
+    navigate('/');
+    return null;
+  }
   
   // Initialize form
   const form = useForm<RegisterFormValues>({
@@ -47,15 +54,30 @@ export default function RegisterPage() {
     setIsLoading(true);
     
     try {
+      // Show processing feedback
+      toast.loading('Création de votre compte...');
+      
+      // Try to register with our auth system
       const success = await register(data.email, data.password, data.name, data.company);
       
       if (success) {
+        toast.success('Compte créé avec succès!');
         // Redirect to home page after successful registration
         navigate('/');
+      } else {
+        toast.error('Erreur lors de la création du compte');
       }
+    } catch (error) {
+      console.error('Registration error:', error);
+      toast.error('Une erreur est survenue lors de l\'inscription');
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Handle demo login
+  const handleDemoLogin = () => {
+    navigate('/login');
   };
   
   return (
@@ -179,12 +201,19 @@ export default function RegisterPage() {
               </form>
             </Form>
           </CardContent>
-          <CardFooter className="flex justify-center">
+          <CardFooter className="flex flex-col space-y-2">
             <div className="text-sm text-center text-muted-foreground">
               Déjà inscrit ?{' '}
               <Link to="/login" className="text-primary hover:underline">
                 Se connecter
               </Link>
+            </div>
+            <div className="text-xs text-center text-muted-foreground mt-4">
+              <p>
+                Note: Pour tester l'application sans inscription, vous pouvez utiliser l'email 
+                <span className="font-semibold mx-1">demo@optiquantia.com</span> 
+                sur la page de connexion.
+              </p>
             </div>
           </CardFooter>
         </Card>

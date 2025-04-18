@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 // Define the form validation schema
 const loginFormSchema = z.object({
   email: z.string().email({ message: 'Email invalide' }),
-  password: z.string().min(6, { message: 'Le mot de passe doit contenir au moins 6 caractères' }),
+  password: z.string().min(1, { message: 'Le mot de passe est requis' }),
 });
 
 type LoginFormValues = z.infer<typeof loginFormSchema>;
@@ -49,11 +49,17 @@ export default function LoginPage() {
     setIsLoading(true);
     
     try {
+      // Show processing feedback
+      toast.loading('Connexion en cours...');
+      
       const success = await login(data.email, data.password);
       
       if (success) {
+        toast.success('Connexion réussie');
         // Redirect to the page they tried to access or home
         navigate(from);
+      } else {
+        toast.error('Email ou mot de passe incorrect');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -61,6 +67,14 @@ export default function LoginPage() {
     } finally {
       setIsLoading(false);
     }
+  };
+  
+  // Handle demo login
+  const handleDemoLogin = () => {
+    form.setValue('email', 'demo@optiquantia.com');
+    form.setValue('password', 'password123');
+    
+    form.handleSubmit(onSubmit)();
   };
   
   return (
@@ -135,6 +149,17 @@ export default function LoginPage() {
                 </Button>
               </form>
             </Form>
+            
+            <div className="mt-4">
+              <Button 
+                variant="outline" 
+                className="w-full" 
+                onClick={handleDemoLogin}
+                disabled={isLoading}
+              >
+                Accès démo
+              </Button>
+            </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-2">
             <div className="text-sm text-center text-muted-foreground">
