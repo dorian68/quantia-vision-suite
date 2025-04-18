@@ -37,13 +37,14 @@
 
     --radius: 0.5rem;
 
-    --sidebar-background: 240 10% 15%;
-    --sidebar-foreground: 240 5% 95%;
+    /* Sidebar colors adjustments for better readability in light mode */
+    --sidebar-background: 240 10% 99%; /* Très léger gris blanc */
+    --sidebar-foreground: 240 10% 20%; /* Gris foncé pour un meilleur contraste */
     --sidebar-primary: 210 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 10% 20%;
-    --sidebar-accent-foreground: 240 5% 95%;
-    --sidebar-border: 240 10% 20%;
+    --sidebar-accent: 240 10% 95%; /* Légèrement plus clair */
+    --sidebar-accent-foreground: 240 10% 10%; /* Presque noir pour la lisibilité */
+    --sidebar-border: 240 10% 90%; /* Bordure très légère */
     --sidebar-ring: 210 100% 50%;
   }
 
