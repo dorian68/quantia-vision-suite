@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Building, Check, Edit, Mail, User as UserIcon, X } from 'lucide-react';
+import { Building, Check, Edit, Mail, User as UserIcon, X, Activity, Shield, CreditCard } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,6 +15,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
+import { useUserDataService } from '@/services/userDataService';
+import { UserActivity } from '@/types/models';
 
 // Define profile form schema
 const profileFormSchema = z.object({
@@ -25,17 +27,12 @@ const profileFormSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
-// Mock user activity data
-const recentActivity = [
-  { id: 1, action: 'Rapport généré', date: '15/04/2025', details: 'Rapport mensuel de performance' },
-  { id: 2, action: 'Tableau créé', date: '10/04/2025', details: 'Analyse de rentabilité produit' },
-  { id: 3, action: 'IA utilisée', date: '08/04/2025', details: 'Prédiction de trésorerie Q2 2025' },
-  { id: 4, action: 'Connexion', date: '05/04/2025', details: 'Connexion depuis l\'application mobile' },
-];
-
 const ProfilePage = () => {
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, supabase } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [userActivities, setUserActivities] = useState<UserActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const userDataService = useUserDataService();
   
   // Initialize form with user data
   const form = useForm<ProfileFormValues>({
@@ -58,6 +55,24 @@ const ProfilePage = () => {
     }
   }, [user, form]);
   
+  // Fetch user activity
+  useEffect(() => {
+    const fetchUserActivity = async () => {
+      try {
+        const activities = await userDataService.getUserActivity();
+        setUserActivities(activities);
+      } catch (error) {
+        console.error('Error fetching user activity:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    if (user) {
+      fetchUserActivity();
+    }
+  }, [user]);
+  
   const onSubmit = async (data: ProfileFormValues) => {
     try {
       const success = await updateProfile({
@@ -68,6 +83,9 @@ const ProfilePage = () => {
       if (success) {
         setIsEditing(false);
         toast.success('Profil mis à jour avec succès');
+        
+        // Log the activity
+        await userDataService.logUserActivity('profile_updated', 'Profil mis à jour');
       }
     } catch (error) {
       toast.error('Erreur lors de la mise à jour du profil');
@@ -106,6 +124,27 @@ const ProfilePage = () => {
   const userPlan = user?.plan || 'free';
   const planDetails = planInfo[userPlan as keyof typeof planInfo];
   
+  // Format user activity for display
+  const formatUserActivity = (activity: UserActivity) => {
+    const actionLabels: Record<string, string> = {
+      'login': 'Connexion',
+      'report_created': 'Rapport créé',
+      'dashboard_created': 'Tableau créé',
+      'ai_used': 'IA utilisée',
+      'profile_updated': 'Profil mis à jour'
+    };
+    
+    return {
+      action: actionLabels[activity.action] || activity.action,
+      details: activity.details || '',
+      date: activity.createdAt.toLocaleDateString('fr-FR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      })
+    };
+  };
+  
   return (
     <AppLayout>
       <div className="mb-8">
@@ -120,6 +159,7 @@ const ProfilePage = () => {
           <TabsTrigger value="profile">Profil</TabsTrigger>
           <TabsTrigger value="activity">Activité récente</TabsTrigger>
           <TabsTrigger value="subscription">Abonnement</TabsTrigger>
+          <TabsTrigger value="security">Sécurité</TabsTrigger>
         </TabsList>
         
         {/* Profile Tab */}
@@ -264,59 +304,59 @@ const ProfilePage = () => {
               </CardContent>
             </Card>
             
-            {/* Account Security */}
+            {/* Account Info */}
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Sécurité du compte</CardTitle>
+                <CardTitle>Informations du compte</CardTitle>
                 <CardDescription>
-                  Gérez la sécurité de votre compte et vos appareils connectés
+                  Détails de votre compte et historique
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Mot de passe</h4>
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground">
-                      Dernière modification: 15/04/2025
-                    </p>
-                    <Button variant="outline" size="sm">
-                      Modifier
-                    </Button>
+                  <h4 className="text-sm font-medium">ID utilisateur</h4>
+                  <p className="text-sm text-muted-foreground font-mono bg-muted p-2 rounded">
+                    {user?.id}
+                  </p>
+                </div>
+                
+                <Separator />
+                
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Plan actuel</h4>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="capitalize">{userPlan}</Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {planDetails.limits}
+                    </span>
                   </div>
                 </div>
+                
                 <Separator />
+                
                 <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Appareils connectés</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">MacBook Pro</p>
-                        <p className="text-xs text-muted-foreground">Paris, France • Aujourd'hui</p>
-                      </div>
-                      <Badge>Actuel</Badge>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-sm font-medium">iPhone 15</p>
-                        <p className="text-xs text-muted-foreground">Lyon, France • Hier</p>
-                      </div>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs">
-                        Déconnecter
-                      </Button>
-                    </div>
-                  </div>
+                  <h4 className="text-sm font-medium">Compte créé le</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {new Date().toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric'
+                    })}
+                  </p>
                 </div>
+                
                 <Separator />
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium">Authentification à deux facteurs</h4>
-                  <div className="flex justify-between items-center">
-                    <p className="text-sm text-muted-foreground">
-                      Protégez votre compte avec 2FA
+                
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <h4 className="text-sm font-medium">Données utilisateur</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Téléchargez toutes vos données
                     </p>
-                    <Button variant="outline" size="sm">
-                      Activer
-                    </Button>
                   </div>
+                  <Button variant="outline" size="sm">
+                    Exporter
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -333,20 +373,33 @@ const ProfilePage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-6">
-                {recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start gap-4">
-                    <div className="bg-primary/10 p-2 rounded-full">
-                      <div className="h-2 w-2 rounded-full bg-primary" />
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">{activity.action}</p>
-                      <p className="text-sm text-muted-foreground">{activity.details}</p>
-                      <p className="text-xs text-muted-foreground">{activity.date}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {loading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin h-8 w-8 border-t-2 border-b-2 border-primary rounded-full"></div>
+                </div>
+              ) : userActivities.length > 0 ? (
+                <div className="space-y-6">
+                  {userActivities.map((activity) => {
+                    const formattedActivity = formatUserActivity(activity);
+                    return (
+                      <div key={activity.id} className="flex items-start gap-4">
+                        <div className="bg-primary/10 p-2 rounded-full">
+                          <Activity className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">{formattedActivity.action}</p>
+                          <p className="text-sm text-muted-foreground">{formattedActivity.details}</p>
+                          <p className="text-xs text-muted-foreground">{formattedActivity.date}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Aucune activité récente</p>
+                </div>
+              )}
             </CardContent>
             <CardFooter>
               <Button variant="outline" className="w-full">
@@ -408,10 +461,75 @@ const ProfilePage = () => {
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm">
-                    Historique de facturation
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    Méthode de paiement
                   </Button>
                   <Button variant="outline" size="sm">
-                    Méthode de paiement
+                    Historique de facturation
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        {/* Security Tab */}
+        <TabsContent value="security">
+          <Card>
+            <CardHeader>
+              <CardTitle>Sécurité du compte</CardTitle>
+              <CardDescription>
+                Gérez la sécurité de votre compte et vos appareils connectés
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Mot de passe</h4>
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">
+                    Dernière modification: {new Date().toLocaleDateString('fr-FR')}
+                  </p>
+                  <Button variant="outline" size="sm">
+                    Modifier
+                  </Button>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Appareils connectés</h4>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-sm font-medium">Navigateur actuel</p>
+                      <p className="text-xs text-muted-foreground">
+                        {`${navigator.platform} • ${navigator.userAgent.includes('Firefox') ? 'Firefox' : 
+                           navigator.userAgent.includes('Chrome') ? 'Chrome' : 
+                           navigator.userAgent.includes('Safari') ? 'Safari' : 'Navigateur'}`}
+                      </p>
+                    </div>
+                    <Badge>Actuel</Badge>
+                  </div>
+                </div>
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Authentification à deux facteurs</h4>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Protégez votre compte avec 2FA
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Non activé
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <Shield className="h-4 w-4 mr-2" />
+                    Activer
                   </Button>
                 </div>
               </div>

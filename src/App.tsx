@@ -36,7 +36,7 @@ const App = () => (
             <Route path="/intelligence" element={<ProtectedRoute><IntelligencePage /></ProtectedRoute>} />
             <Route path="/predictive" element={<ProtectedRoute><PredictivePage /></ProtectedRoute>} />
             <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><AdminDashboardPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute requireAdmin={true}><AdminDashboardPage /></ProtectedRoute>} />
             
             {/* Catch-all route */}
             <Route path="*" element={<NotFound />} />

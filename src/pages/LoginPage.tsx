@@ -7,10 +7,10 @@ import { z } from 'zod';
 import { Lock, LogIn, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 // Define the form validation schema
 const loginFormSchema = z.object({
@@ -21,13 +21,19 @@ const loginFormSchema = z.object({
 type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isLoading, setIsLoading] = useState(false);
   
   // Get redirect path from location state or default to home
   const from = (location.state as any)?.from || '/';
+  
+  // Redirect if already logged in
+  if (user) {
+    navigate(from);
+    return null;
+  }
   
   // Initialize form
   const form = useForm<LoginFormValues>({
@@ -49,6 +55,9 @@ export default function LoginPage() {
         // Redirect to the page they tried to access or home
         navigate(from);
       }
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error('Erreur de connexion');
     } finally {
       setIsLoading(false);
     }
@@ -133,12 +142,6 @@ export default function LoginPage() {
               <Link to="/register" className="text-primary hover:underline">
                 Créer un compte
               </Link>
-            </div>
-            
-            <div className="text-xs text-center text-muted-foreground mt-6">
-              <p>Données de démonstration :</p>
-              <p>Email: demo@optiquantia.com</p>
-              <p>Mot de passe: password123</p>
             </div>
           </CardFooter>
         </Card>

@@ -6,21 +6,29 @@ import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  requireAdmin?: boolean;
 }
 
-export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+export const ProtectedRoute = ({ children, requireAdmin = false }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    if (!loading && !user) {
-      // Redirect to login if not authenticated
-      navigate('/login', {
-        state: { from: location.pathname }
-      });
+    if (!loading) {
+      if (!user) {
+        // Redirect to login if not authenticated
+        navigate('/login', {
+          state: { from: location.pathname }
+        });
+      } else if (requireAdmin && user.role !== 'admin') {
+        // Redirect to home if not an admin
+        navigate('/', {
+          state: { error: 'Accès non autorisé' }
+        });
+      }
     }
-  }, [user, loading, navigate, location]);
+  }, [user, loading, navigate, location, requireAdmin]);
 
   if (loading) {
     return (
@@ -31,5 +39,8 @@ export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  return user ? <>{children}</> : null;
+  if (!user) return null;
+  if (requireAdmin && user.role !== 'admin') return null;
+  
+  return <>{children}</>;
 };

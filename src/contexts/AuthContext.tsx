@@ -2,6 +2,7 @@
 import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // Define the user type
 export interface User {
@@ -21,36 +22,19 @@ interface AuthContextType {
   register: (email: string, password: string, name: string, company?: string) => Promise<boolean>;
   logout: () => void;
   updateProfile: (data: Partial<User>) => Promise<boolean>;
+  supabase: SupabaseClient;
 }
 
 // Create the auth context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock user data - this would be replaced with Supabase auth in production
-const MOCK_USERS = [
-  {
-    id: '1',
-    email: 'demo@optiquantia.com',
-    password: 'password123',
-    name: 'Utilisateur Demo',
-    company: 'OptiQuantIA',
-    role: 'admin' as const,
-    plan: 'enterprise' as const,
-  },
-  {
-    id: '2',
-    email: 'user@example.com',
-    password: 'password123',
-    name: 'John Doe',
-    company: 'Example Corp',
-    role: 'user' as const,
-    plan: 'pro' as const,
-  }
-];
+// Create a Supabase client
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Local storage keys
+// User storage keys
 const USER_STORAGE_KEY = 'optiquantia-user';
-const AUTH_TOKEN_KEY = 'optiquantia-auth-token';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -59,25 +43,80 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Check for existing session on mount
   useEffect(() => {
-    const checkAuth = () => {
-      const storedUser = localStorage.getItem(USER_STORAGE_KEY);
-      const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    const checkAuth = async () => {
+      setLoading(true);
       
-      if (storedUser && token) {
-        try {
-          const userData = JSON.parse(storedUser) as User;
+      // Check for existing Supabase session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Fetch user profile from Supabase
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (error) {
+          console.error("Error fetching user profile:", error);
+          setUser(null);
+        } else if (profile) {
+          const userData: User = {
+            id: profile.id,
+            email: session.user.email || '',
+            name: profile.name || '',
+            company: profile.company,
+            role: profile.role || 'user',
+            plan: profile.plan || 'free',
+          };
+          
           setUser(userData);
-        } catch (error) {
-          console.error('Failed to parse user data', error);
-          localStorage.removeItem(USER_STORAGE_KEY);
-          localStorage.removeItem(AUTH_TOKEN_KEY);
+          localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
         }
+      } else {
+        setUser(null);
+        localStorage.removeItem(USER_STORAGE_KEY);
       }
       
       setLoading(false);
     };
     
     checkAuth();
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          // Fetch user profile
+          const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .single();
+          
+          if (!error && profile) {
+            const userData: User = {
+              id: profile.id,
+              email: session.user.email || '',
+              name: profile.name || '',
+              company: profile.company,
+              role: profile.role || 'user',
+              plan: profile.plan || 'free',
+            };
+            
+            setUser(userData);
+            localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUser(null);
+          localStorage.removeItem(USER_STORAGE_KEY);
+        }
+      }
+    );
+    
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   // Login function
@@ -85,21 +124,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     
     try {
-      // Mock authentication - replace with Supabase auth
-      const matchedUser = MOCK_USERS.find(u => u.email === email && u.password === password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       
-      if (matchedUser) {
-        const { password: _, ...userWithoutPassword } = matchedUser;
-        setUser(userWithoutPassword);
-        
-        // Store in localStorage (temporary solution)
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userWithoutPassword));
-        localStorage.setItem(AUTH_TOKEN_KEY, 'mock-jwt-token-' + userWithoutPassword.id);
-        
+      if (error) {
+        console.error("Login error:", error.message);
+        toast.error(error.message || 'Email ou mot de passe incorrect');
+        return false;
+      }
+      
+      if (data.user) {
         toast.success('Connexion réussie');
         return true;
       } else {
-        toast.error('Email ou mot de passe incorrect');
+        toast.error('Erreur lors de la connexion');
         return false;
       }
     } catch (error) {
@@ -121,32 +161,51 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     
     try {
-      // Check if email already exists
-      if (MOCK_USERS.some(u => u.email === email)) {
-        toast.error('Cet email est déjà utilisé');
+      // Register with Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            company,
+          },
+        },
+      });
+      
+      if (error) {
+        console.error("Registration error:", error.message);
+        toast.error(error.message || 'Erreur lors de l\'inscription');
         return false;
       }
       
-      // Create new user (mock)
-      const newUser: User = {
-        id: `user-${Date.now()}`,
-        email,
-        name,
-        company,
-        role: 'user',
-        plan: 'free',
-      };
-      
-      // In a real app with Supabase, we would create the user here
-      
-      setUser(newUser);
-      
-      // Store in localStorage (temporary solution)
-      localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(newUser));
-      localStorage.setItem(AUTH_TOKEN_KEY, 'mock-jwt-token-' + newUser.id);
-      
-      toast.success('Inscription réussie');
-      return true;
+      if (data.user) {
+        // Create profile in profiles table
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: data.user.id,
+              name,
+              company,
+              role: 'user',
+              plan: 'free',
+              created_at: new Date().toISOString(),
+            },
+          ]);
+        
+        if (profileError) {
+          console.error("Profile creation error:", profileError);
+          toast.error('Compte créé mais erreur lors de la création du profil');
+          return true; // Still return true as the auth account was created
+        }
+        
+        toast.success('Inscription réussie');
+        return true;
+      } else {
+        toast.error('Erreur lors de l\'inscription');
+        return false;
+      }
     } catch (error) {
       console.error('Registration error:', error);
       toast.error('Erreur lors de l\'inscription');
@@ -157,12 +216,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   // Logout function
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem(AUTH_TOKEN_KEY);
-    navigate('/login');
-    toast.success('Déconnexion réussie');
+  const logout = async () => {
+    const { error } = await supabase.auth.signOut();
+    
+    if (error) {
+      console.error("Logout error:", error);
+      toast.error('Erreur lors de la déconnexion');
+    } else {
+      setUser(null);
+      localStorage.removeItem(USER_STORAGE_KEY);
+      navigate('/login');
+      toast.success('Déconnexion réussie');
+    }
   };
 
   // Update profile function
@@ -172,10 +237,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       if (!user) return false;
       
+      // Update profile in Supabase
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          name: data.name,
+          company: data.company,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+      
+      if (error) {
+        console.error("Profile update error:", error);
+        toast.error('Erreur lors de la mise à jour du profil');
+        return false;
+      }
+      
+      // Update local user state
       const updatedUser = { ...user, ...data };
       setUser(updatedUser);
-      
-      // Update in localStorage (temporary solution)
       localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
       
       toast.success('Profil mis à jour');
@@ -197,7 +277,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         login,
         register,
         logout,
-        updateProfile
+        updateProfile,
+        supabase
       }}
     >
       {children}
