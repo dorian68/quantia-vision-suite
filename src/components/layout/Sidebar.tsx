@@ -11,11 +11,14 @@ import {
   Menu, 
   X, 
   User,
-  Lightbulb
+  Lightbulb,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
+import { Badge } from '@/components/ui/badge';
 
 interface NavItemProps {
   icon: LucideIcon;
@@ -23,9 +26,10 @@ interface NavItemProps {
   href: string;
   active?: boolean;
   color?: string;
+  badge?: string;
 }
 
-const NavItem = ({ icon: Icon, label, href, active, color = 'blue' }: NavItemProps) => {
+const NavItem = ({ icon: Icon, label, href, active, color = 'blue', badge }: NavItemProps) => {
   const colorMap = {
     blue: 'from-quantia-blue to-quantia-cyan',
     purple: 'from-quantia-purple to-quantia-indigo',
@@ -57,7 +61,12 @@ const NavItem = ({ icon: Icon, label, href, active, color = 'blue' }: NavItemPro
         )} />
       </span>
       <span className="font-medium">{label}</span>
-      {active && (
+      {badge && (
+        <Badge className="ml-auto" variant={active ? "default" : "secondary"}>
+          {badge}
+        </Badge>
+      )}
+      {active && !badge && (
         <span className="ml-auto w-1.5 h-12 bg-gradient-to-b from-primary/80 to-primary/30 rounded-full" />
       )}
     </Link>
@@ -68,10 +77,15 @@ export function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   
   const toggleSidebar = () => setIsOpen(!isOpen);
   
   const isActive = (path: string) => location.pathname === path;
+
+  const isAdmin = user?.role === 'admin';
+  const planLabel = user?.plan === 'enterprise' ? 'Enterprise' : 
+                   user?.plan === 'pro' ? 'Pro' : 'Free';
   
   return (
     <>
@@ -106,6 +120,23 @@ export function Sidebar() {
           )}
         </div>
         
+        {user && (
+          <div className="px-4 py-2 border-b border-sidebar-border">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center">
+                <User className="h-3 w-3 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate text-sidebar-foreground">{user.name}</p>
+                <p className="text-xs text-sidebar-foreground/70 truncate">{user.email}</p>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                {planLabel}
+              </Badge>
+            </div>
+          </div>
+        )}
+        
         <div className="flex-1 py-4 overflow-y-auto">
           <nav className="px-2 space-y-1">
             <p className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
@@ -129,6 +160,7 @@ export function Sidebar() {
               href="/intelligence" 
               active={isActive('/intelligence')} 
               color="purple"
+              badge="New"
             />
             <NavItem 
               icon={TrendingUp} 
@@ -143,6 +175,21 @@ export function Sidebar() {
             </p>
             <NavItem icon={User} label="Mon Profil" href="/profile" active={isActive('/profile')} />
             <NavItem icon={Settings} label="Paramètres" href="/settings" active={isActive('/settings')} />
+            
+            {isAdmin && (
+              <>
+                <p className="mt-6 px-3 py-2 text-xs font-semibold text-sidebar-foreground/60 uppercase tracking-wider">
+                  Administration
+                </p>
+                <NavItem 
+                  icon={ShieldCheck} 
+                  label="Administration" 
+                  href="/admin" 
+                  active={isActive('/admin')} 
+                  color="blue"
+                />
+              </>
+            )}
           </nav>
         </div>
         

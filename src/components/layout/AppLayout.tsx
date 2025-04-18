@@ -4,14 +4,17 @@ import { cn } from '@/lib/utils';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface AppLayoutProps {
   children: ReactNode;
   className?: string;
+  requireAuth?: boolean;
 }
 
-export function AppLayout({ children, className }: AppLayoutProps) {
+export function AppLayout({ children, className, requireAuth = true }: AppLayoutProps) {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   
   return (
     <div className="min-h-screen bg-background text-foreground flex">

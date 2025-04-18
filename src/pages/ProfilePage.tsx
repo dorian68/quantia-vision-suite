@@ -1,567 +1,424 @@
 
-import { User, Settings, Building, CreditCard, Bell, Mail, Lock, LogOut } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { Building, Check, Edit, Mail, User as UserIcon, X } from 'lucide-react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { AIAssistant } from '@/components/assistant/AIAssistant';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Separator } from '@/components/ui/separator';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
+
+// Define profile form schema
+const profileFormSchema = z.object({
+  name: z.string().min(2, { message: 'Le nom doit contenir au moins 2 caractères' }),
+  email: z.string().email({ message: 'Email invalide' }).optional(),
+  company: z.string().optional(),
+});
+
+type ProfileFormValues = z.infer<typeof profileFormSchema>;
+
+// Mock user activity data
+const recentActivity = [
+  { id: 1, action: 'Rapport généré', date: '15/04/2025', details: 'Rapport mensuel de performance' },
+  { id: 2, action: 'Tableau créé', date: '10/04/2025', details: 'Analyse de rentabilité produit' },
+  { id: 3, action: 'IA utilisée', date: '08/04/2025', details: 'Prédiction de trésorerie Q2 2025' },
+  { id: 4, action: 'Connexion', date: '05/04/2025', details: 'Connexion depuis l\'application mobile' },
+];
 
 const ProfilePage = () => {
+  const { user, updateProfile } = useAuth();
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // Initialize form with user data
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileFormSchema),
+    defaultValues: {
+      name: user?.name || '',
+      email: user?.email || '',
+      company: user?.company || '',
+    },
+  });
+  
+  // Update form when user data changes
+  useEffect(() => {
+    if (user) {
+      form.reset({
+        name: user.name,
+        email: user.email,
+        company: user.company,
+      });
+    }
+  }, [user, form]);
+  
+  const onSubmit = async (data: ProfileFormValues) => {
+    try {
+      const success = await updateProfile({
+        name: data.name,
+        company: data.company,
+      });
+      
+      if (success) {
+        setIsEditing(false);
+        toast.success('Profil mis à jour avec succès');
+      }
+    } catch (error) {
+      toast.error('Erreur lors de la mise à jour du profil');
+    }
+  };
+  
+  // Get user initials for avatar
+  const getUserInitials = () => {
+    if (!user?.name) return 'US';
+    return user.name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
+  };
+  
+  const planInfo = {
+    'free': {
+      name: 'Free',
+      features: ['Rapports de base', 'Tableaux limités', 'Support email'],
+      limits: '3 rapports par mois',
+    },
+    'pro': {
+      name: 'Pro',
+      features: ['Rapports illimités', 'Tableaux personnalisés', 'Support prioritaire', 'Export avancé'],
+      limits: 'Utilisateurs limités (5)',
+    },
+    'enterprise': {
+      name: 'Enterprise',
+      features: ['Tout Pro', 'API personnalisée', 'Utilisateurs illimités', 'Support dédié 24/7', 'Intégrations'],
+      limits: 'Aucune limite',
+    },
+  };
+  
+  const userPlan = user?.plan || 'free';
+  const planDetails = planInfo[userPlan as keyof typeof planInfo];
+  
   return (
     <AppLayout>
-      {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold leading-tight tracking-tighter">
-          Mon Profil
-        </h1>
-        <p className="mt-2 text-lg text-muted-foreground">
-          Gérez vos informations personnelles et vos préférences
+        <h1 className="text-3xl font-bold tracking-tight">Mon profil</h1>
+        <p className="text-muted-foreground mt-2">
+          Gérez vos informations personnelles et consultez vos activités récentes
         </p>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Left sidebar */}
-        <div>
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex flex-col items-center text-center">
-                <Avatar className="h-24 w-24 mb-4">
-                  <AvatarImage src="" alt="User" />
-                  <AvatarFallback className="text-xl">US</AvatarFallback>
-                </Avatar>
-                <h2 className="text-xl font-bold">Utilisateur Demo</h2>
-                <p className="text-sm text-muted-foreground">demo@optiquantia.com</p>
-                <div className="mt-3 bg-primary/10 px-3 py-1 rounded-full text-xs font-medium text-primary">
-                  Plan Pro
+      
+      <Tabs defaultValue="profile" className="space-y-8">
+        <TabsList>
+          <TabsTrigger value="profile">Profil</TabsTrigger>
+          <TabsTrigger value="activity">Activité récente</TabsTrigger>
+          <TabsTrigger value="subscription">Abonnement</TabsTrigger>
+        </TabsList>
+        
+        {/* Profile Tab */}
+        <TabsContent value="profile" className="space-y-6">
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* User Card */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Informations</CardTitle>
+                <CardDescription>
+                  Gérez vos informations personnelles
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center gap-4 sm:flex-row">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src="" alt={user?.name || 'User'} />
+                    <AvatarFallback className="text-lg bg-primary/10 text-primary">
+                      {getUserInitials()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="space-y-1 text-center sm:text-left">
+                    <h3 className="text-xl font-semibold">{user?.name}</h3>
+                    <div className="text-sm text-muted-foreground flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                      <span className="flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> {user?.email}
+                      </span>
+                      {user?.company && (
+                        <span className="flex items-center gap-1">
+                          <Building className="h-3 w-3" /> {user.company}
+                        </span>
+                      )}
+                    </div>
+                    <div className="pt-2">
+                      <Badge variant={user?.role === 'admin' ? 'default' : 'outline'}>
+                        {user?.role === 'admin' ? 'Administrateur' : 'Utilisateur'}
+                      </Badge>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              <div className="mt-6 space-y-1">
-                <Button variant="ghost" className="w-full justify-start" size="sm">
-                  <User className="h-4 w-4 mr-2" />
-                  Profil
-                </Button>
-                <Button variant="ghost" className="w-full justify-start" size="sm">
-                  <Building className="h-4 w-4 mr-2" />
-                  Entreprise
-                </Button>
-                <Button variant="ghost" className="w-full justify-start" size="sm">
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Abonnement
-                </Button>
-                <Button variant="ghost" className="w-full justify-start" size="sm">
-                  <Bell className="h-4 w-4 mr-2" />
-                  Notifications
-                </Button>
-                <Button variant="ghost" className="w-full justify-start" size="sm">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Préférences
-                </Button>
-                <Button variant="ghost" className="w-full justify-start text-destructive" size="sm">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Déconnexion
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="mt-6">
+                <Separator className="my-6" />
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    <FormField
+                      control={form.control}
+                      name="name"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nom complet</FormLabel>
+                          <div className="flex gap-2">
+                            <FormControl>
+                              <div className="relative flex-1">
+                                <UserIcon className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  className="pl-10"
+                                  disabled={!isEditing}
+                                  {...field}
+                                />
+                              </div>
+                            </FormControl>
+                          </div>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Email</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                className="pl-10"
+                                disabled={true} // Email cannot be changed in this demo
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="company"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Entreprise</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Building className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                className="pl-10"
+                                disabled={!isEditing}
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    {isEditing ? (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setIsEditing(false);
+                            form.reset();
+                          }}
+                        >
+                          <X className="mr-2 h-4 w-4" />
+                          Annuler
+                        </Button>
+                        <Button type="submit" size="sm">
+                          <Check className="mr-2 h-4 w-4" />
+                          Enregistrer
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => setIsEditing(true)}
+                      >
+                        <Edit className="mr-2 h-4 w-4" />
+                        Modifier le profil
+                      </Button>
+                    )}
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+            
+            {/* Account Security */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle>Sécurité du compte</CardTitle>
+                <CardDescription>
+                  Gérez la sécurité de votre compte et vos appareils connectés
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Mot de passe</h4>
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-muted-foreground">
+                      Dernière modification: 15/04/2025
+                    </p>
+                    <Button variant="outline" size="sm">
+                      Modifier
+                    </Button>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Appareils connectés</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium">MacBook Pro</p>
+                        <p className="text-xs text-muted-foreground">Paris, France • Aujourd'hui</p>
+                      </div>
+                      <Badge>Actuel</Badge>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-sm font-medium">iPhone 15</p>
+                        <p className="text-xs text-muted-foreground">Lyon, France • Hier</p>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-8 text-xs">
+                        Déconnecter
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <h4 className="text-sm font-medium">Authentification à deux facteurs</h4>
+                  <div className="flex justify-between items-center">
+                    <p className="text-sm text-muted-foreground">
+                      Protégez votre compte avec 2FA
+                    </p>
+                    <Button variant="outline" size="sm">
+                      Activer
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+        
+        {/* Activity Tab */}
+        <TabsContent value="activity">
+          <Card>
             <CardHeader>
-              <CardTitle>Utilisation du compte</CardTitle>
-              <CardDescription>Statistiques d'utilisation</CardDescription>
+              <CardTitle>Activité récente</CardTitle>
+              <CardDescription>
+                Suivez vos dernières actions sur la plateforme
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              <div className="space-y-6">
+                {recentActivity.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-4">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      <div className="h-2 w-2 rounded-full bg-primary" />
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{activity.action}</p>
+                      <p className="text-sm text-muted-foreground">{activity.details}</p>
+                      <p className="text-xs text-muted-foreground">{activity.date}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button variant="outline" className="w-full">
+                Voir plus d'activités
+              </Button>
+            </CardFooter>
+          </Card>
+        </TabsContent>
+        
+        {/* Subscription Tab */}
+        <TabsContent value="subscription">
+          <Card>
+            <CardHeader>
+              <CardTitle>Abonnement</CardTitle>
+              <CardDescription>
+                Gérez votre abonnement et vos informations de facturation
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm">Stockage</span>
-                    <span className="text-sm">45%</span>
-                  </div>
-                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: '45%' }}></div>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">450 Mo sur 1 Go</p>
+                  <h3 className="text-xl font-semibold">Plan {planDetails.name}</h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {planDetails.limits}
+                  </p>
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm">Rapports</span>
-                    <span className="text-sm">75%</span>
+                <Button variant={userPlan === 'enterprise' ? 'secondary' : 'default'}>
+                  {userPlan === 'enterprise' ? 'Contacter le commercial' : 'Mettre à niveau'}
+                </Button>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h4 className="text-sm font-medium mb-3">Fonctionnalités incluses :</h4>
+                <ul className="space-y-2">
+                  {planDetails.features.map((feature, index) => (
+                    <li key={index} className="flex items-center gap-2 text-sm">
+                      <Check className="h-4 w-4 text-green-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <Separator />
+              
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Facturation</h4>
+                <div className="bg-muted p-4 rounded-lg">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm font-medium">Prochain paiement</span>
+                    <span className="text-sm">01/05/2025</span>
                   </div>
-                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: '75%' }}></div>
+                  <div className="flex justify-between">
+                    <span className="text-sm font-medium">Méthode de paiement</span>
+                    <span className="text-sm">Carte ••••4242</span>
                   </div>
-                  <p className="mt-1 text-xs text-muted-foreground">15 sur 20 par mois</p>
                 </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm">Tableaux</span>
-                    <span className="text-sm">30%</span>
-                  </div>
-                  <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full bg-primary" style={{ width: '30%' }}></div>
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">3 sur 10 tableaux</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm">
+                    Historique de facturation
+                  </Button>
+                  <Button variant="outline" size="sm">
+                    Méthode de paiement
+                  </Button>
                 </div>
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Main content */}
-        <div className="md:col-span-2">
-          <Tabs defaultValue="personal" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="personal">Profil</TabsTrigger>
-              <TabsTrigger value="company">Entreprise</TabsTrigger>
-              <TabsTrigger value="subscription">Abonnement</TabsTrigger>
-              <TabsTrigger value="security">Sécurité</TabsTrigger>
-            </TabsList>
-
-            {/* Personal Tab */}
-            <TabsContent value="personal" className="pt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informations personnelles</CardTitle>
-                  <CardDescription>Gérez vos informations de contact</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="firstName">Prénom</label>
-                        <Input id="firstName" placeholder="Prénom" defaultValue="Utilisateur" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="lastName">Nom</label>
-                        <Input id="lastName" placeholder="Nom" defaultValue="Demo" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="email">Email</label>
-                      <Input id="email" type="email" placeholder="Email" defaultValue="demo@optiquantia.com" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="phone">Téléphone</label>
-                      <Input id="phone" placeholder="Téléphone" defaultValue="+33 6 12 34 56 78" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="position">Fonction</label>
-                      <Input id="position" placeholder="Fonction" defaultValue="Directeur Financier" />
-                    </div>
-
-                    <div className="pt-4">
-                      <Button>Enregistrer les changements</Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Préférences de communication</CardTitle>
-                  <CardDescription>Gérez les notifications et communications</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">Emails de rapport</h4>
-                        <p className="text-sm text-muted-foreground">Recevoir des rapports hebdomadaires par email</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">Alertes importantes</h4>
-                        <p className="text-sm text-muted-foreground">Notifications en cas de dépassement de seuils critiques</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">Mises à jour produit</h4>
-                        <p className="text-sm text-muted-foreground">Recevoir les annonces de nouvelles fonctionnalités</p>
-                      </div>
-                      <Switch />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium">Conseils d'utilisation</h4>
-                        <p className="text-sm text-muted-foreground">Conseils pour optimiser votre utilisation</p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Company Tab */}
-            <TabsContent value="company" className="pt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Informations entreprise</CardTitle>
-                  <CardDescription>Gérez les détails de votre entreprise</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="companyName">Nom de l'entreprise</label>
-                      <Input id="companyName" placeholder="Nom de l'entreprise" defaultValue="OptiQuantIA Demo" />
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="industry">Secteur d'activité</label>
-                        <Input id="industry" placeholder="Secteur" defaultValue="Services financiers" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="size">Taille de l'entreprise</label>
-                        <Input id="size" placeholder="Effectif" defaultValue="50-100 employés" />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="address">Adresse</label>
-                      <Input id="address" placeholder="Adresse" defaultValue="123 Rue de la Finance" />
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="zipCode">Code postal</label>
-                        <Input id="zipCode" placeholder="Code postal" defaultValue="75008" />
-                      </div>
-                      <div className="space-y-2 col-span-1 md:col-span-2">
-                        <label className="text-sm font-medium" htmlFor="city">Ville</label>
-                        <Input id="city" placeholder="Ville" defaultValue="Paris" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="country">Pays</label>
-                        <Input id="country" placeholder="Pays" defaultValue="France" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="vatNumber">Numéro TVA</label>
-                        <Input id="vatNumber" placeholder="Numéro TVA" defaultValue="FR12345678901" />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium" htmlFor="siret">SIRET</label>
-                        <Input id="siret" placeholder="SIRET" defaultValue="12345678901234" />
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <Button>Enregistrer les changements</Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Équipe</CardTitle>
-                  <CardDescription>Gérez les accès utilisateurs</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>US</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium">Utilisateur Demo</h4>
-                          <p className="text-xs text-muted-foreground">demo@optiquantia.com</p>
-                        </div>
-                      </div>
-                      <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
-                        Admin
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>JD</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium">Jean Dupont</h4>
-                          <p className="text-xs text-muted-foreground">j.dupont@example.com</p>
-                        </div>
-                      </div>
-                      <div className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">
-                        Utilisateur
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback>ML</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium">Marie Leroy</h4>
-                          <p className="text-xs text-muted-foreground">m.leroy@example.com</p>
-                        </div>
-                      </div>
-                      <div className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">
-                        Lecture seule
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <Button variant="outline" className="w-full">
-                        <User className="h-4 w-4 mr-2" />
-                        Ajouter un utilisateur
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Subscription Tab */}
-            <TabsContent value="subscription" className="pt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Votre abonnement actuel</CardTitle>
-                  <CardDescription>Plan Pro - 99€/mois</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-6 p-4 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="bg-primary/10 p-2 rounded-full">
-                        <CreditCard className="h-5 w-5 text-primary" />
-                      </div>
-                      <h3 className="font-medium">Facturation mensuelle</h3>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Votre prochain paiement de 99€ sera prélevé le 15/08/2024
-                    </p>
-                  </div>
-
-                  <div className="space-y-4">
-                    <h3 className="font-medium">Fonctionnalités incluses :</h3>
-                    <ul className="space-y-2">
-                      <li className="flex items-start gap-2">
-                        <div className="h-5 w-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
-                          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span className="font-medium">Tous les modules</span>
-                          <p className="text-xs text-muted-foreground">Pilotage, Intelligence, Prédiction</p>
-                        </div>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="h-5 w-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
-                          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span className="font-medium">Jusqu'à 5 utilisateurs</span>
-                          <p className="text-xs text-muted-foreground">Accès multi-utilisateurs avec permissions</p>
-                        </div>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="h-5 w-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
-                          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span className="font-medium">20 rapports/mois</span>
-                          <p className="text-xs text-muted-foreground">Générateur de rapports avancés</p>
-                        </div>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="h-5 w-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
-                          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span className="font-medium">Support prioritaire</span>
-                          <p className="text-xs text-muted-foreground">Temps de réponse sous 4h</p>
-                        </div>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <div className="h-5 w-5 bg-primary/10 rounded-full flex items-center justify-center mt-0.5">
-                          <svg className="h-3 w-3 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                          </svg>
-                        </div>
-                        <div>
-                          <span className="font-medium">1 Go de stockage</span>
-                          <p className="text-xs text-muted-foreground">Pour vos rapports et tableaux personnalisés</p>
-                        </div>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="flex gap-4 mt-6">
-                    <Button variant="outline">Changer de plan</Button>
-                    <Button variant="default">Gérer le paiement</Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Historique de facturation</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between py-2 border-b">
-                      <div>
-                        <h4 className="font-medium">15 Juillet 2024</h4>
-                        <p className="text-xs text-muted-foreground">Abonnement mensuel - Plan Pro</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">99,00 €</p>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs">
-                          Facture
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b">
-                      <div>
-                        <h4 className="font-medium">15 Juin 2024</h4>
-                        <p className="text-xs text-muted-foreground">Abonnement mensuel - Plan Pro</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">99,00 €</p>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs">
-                          Facture
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b">
-                      <div>
-                        <h4 className="font-medium">15 Mai 2024</h4>
-                        <p className="text-xs text-muted-foreground">Abonnement mensuel - Plan Pro</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">99,00 €</p>
-                        <Button variant="ghost" size="sm" className="h-7 text-xs">
-                          Facture
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Security Tab */}
-            <TabsContent value="security" className="pt-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Sécurité du compte</CardTitle>
-                  <CardDescription>Gérez vos identifiants et paramètres de sécurité</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="currentPassword">Mot de passe actuel</label>
-                      <Input id="currentPassword" type="password" placeholder="••••••••" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="newPassword">Nouveau mot de passe</label>
-                      <Input id="newPassword" type="password" placeholder="••••••••" />
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium" htmlFor="confirmPassword">Confirmer le mot de passe</label>
-                      <Input id="confirmPassword" type="password" placeholder="••••••••" />
-                    </div>
-
-                    <div className="pt-4">
-                      <Button>Mettre à jour le mot de passe</Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Options de sécurité avancées</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium flex items-center gap-2">
-                          <Lock className="h-4 w-4" />
-                          Authentification à deux facteurs
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          Ajoutez une couche de sécurité supplémentaire à votre compte
-                        </p>
-                      </div>
-                      <Switch />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          Alertes de connexion
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          Recevez une notification lors de nouvelles connexions
-                        </p>
-                      </div>
-                      <Switch defaultChecked />
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium flex items-center gap-2">
-                          <Settings className="h-4 w-4" />
-                          Sessions actives
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          Gérez les appareils connectés à votre compte
-                        </p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        Gérer
-                      </Button>
-                    </div>
-
-                    <div className="pt-4 border-t">
-                      <Button variant="destructive" className="mt-4">
-                        <LogOut className="h-4 w-4 mr-2" />
-                        Déconnecter toutes les sessions
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-
-      {/* AI Assistant */}
-      <AIAssistant />
+        </TabsContent>
+      </Tabs>
     </AppLayout>
   );
 };
